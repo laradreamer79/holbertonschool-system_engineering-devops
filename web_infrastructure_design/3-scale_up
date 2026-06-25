@@ -1,0 +1,106 @@
+Scale up
+========
+
+A user wants to access the website www.foobar.com from a browser.
+
+1. The user types https://www.foobar.com in the browser.
+2. The browser asks DNS to translate www.foobar.com into an IP address.
+3. The DNS zone for foobar.com has a www record that points to the public
+   virtual IP address shared by the HAproxy load balancer cluster.
+4. One of the HAproxy load balancers receives the request.
+5. The load balancer forwards the request to the web server layer.
+6. The Nginx web server receives the HTTP or HTTPS request.
+7. If the request is for static content, Nginx can serve it directly.
+8. If the request needs dynamic content, Nginx forwards it to the application
+   server.
+9. The application server runs the application code from the application files.
+10. If data is needed, the application server queries the database server.
+11. The response travels back from the application server to Nginx, then to the
+    load balancer, then to the user's browser.
+
+Infrastructure
+--------------
+
+Load balancer 1:
+
+    Components:
+        - HAproxy
+
+Load balancer 2:
+
+    Components:
+        - HAproxy configured in a cluster with Load balancer 1
+
+Server 1:
+
+    Role:
+        - Web server
+
+    Components:
+        - Nginx
+
+Server 2:
+
+    Role:
+        - Application server
+
+    Components:
+        - Application server
+        - Application files, which are the website code base
+
+Server 3:
+
+    Role:
+        - Database server
+
+    Components:
+        - MySQL database
+
+Why each additional element is added
+------------------------------------
+
+The additional server is added so the infrastructure can split the web server,
+application server, and database into separate machines. This makes the design
+cleaner and easier to scale because each server has a dedicated role.
+
+The second HAproxy load balancer is added to remove the load balancer as a
+single point of failure. If one load balancer fails, the other load balancer can
+continue accepting traffic.
+
+The HAproxy cluster is added so both load balancers work together. They can be
+configured with a shared virtual IP address using a failover tool such as
+Keepalived. In that setup, one HAproxy node owns the virtual IP address, and the
+other can take over if the first one fails.
+
+The dedicated web server is added to handle the HTTP layer. Nginx receives user
+requests, serves static files, handles web-specific configuration, and forwards
+dynamic requests to the application server.
+
+The dedicated application server is added to run the application logic
+separately from the web server and database. This makes it easier to deploy
+application code, tune application resources, and scale application processing
+without directly changing the database server.
+
+The dedicated database server is added to store persistent data separately from
+the web and application layers. Databases usually need different resources and
+tuning, especially disk performance, memory, backups, and replication.
+
+Why splitting components helps
+------------------------------
+
+Splitting the web server, application server, and database onto their own
+servers makes the infrastructure easier to scale and maintain.
+
+If the website receives more static or HTTP traffic, more web servers can be
+added behind the load balancer.
+
+If the application logic becomes slow, more application servers can be added or
+the application server can be given more CPU and memory.
+
+If the database becomes the bottleneck, the database layer can be optimized,
+replicated, backed up, or scaled without mixing those changes with the web and
+application layers.
+
+This separation also reduces resource competition. Nginx, the application
+server, and MySQL no longer fight for the same CPU, memory, disk, and network
+resources on a single machine.

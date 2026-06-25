@@ -1,0 +1,153 @@
+Distributed web infrastructure
+==============================
+
+A user wants to access the website www.foobar.com from a browser.
+
+1. The user types https://www.foobar.com in the browser.
+2. The browser asks DNS to translate www.foobar.com into an IP address.
+3. The DNS zone for foobar.com has a www record that points to the public IP
+   address of the HAproxy load balancer.
+4. The browser connects to the load balancer using HTTP or HTTPS over TCP/IP.
+5. HAproxy receives the request and forwards it to one of the two backend
+   servers.
+6. The selected server's Nginx web server receives the request.
+7. Nginx serves static content directly or forwards dynamic requests to the
+   application server on the same machine.
+8. The application server runs the application code from its local application
+   files.
+9. If data is needed, the application server communicates with MySQL.
+10. Write operations go to the Primary MySQL node.
+11. Read operations can go to a Replica MySQL node if the application is
+    configured to use replicas for reads.
+12. The response is sent back through Nginx, then HAproxy, then to the user's
+    browser.
+
+Infrastructure
+--------------
+
+Load balancer:
+
+    HAproxy
+    Public entry point for www.foobar.com
+
+Server 1:
+
+    Components:
+        - Nginx web server
+        - Application server
+        - Application files, which are the website code base
+        - MySQL Primary database
+
+Server 2:
+
+    Components:
+        - Nginx web server
+        - Application server
+        - Application files, which are the website code base
+        - MySQL Replica database
+
+Why each additional element is added
+------------------------------------
+
+The HAproxy load balancer is added to distribute incoming traffic between the
+two backend servers. This helps the infrastructure handle more traffic than a
+single server and allows one backend server to continue serving requests if the
+other backend server becomes unavailable.
+
+The second server is added to increase capacity and improve availability. Each
+server has its own Nginx web server, application server, application files, and
+MySQL database instance, so the application can run from more than one machine.
+
+The second Nginx web server is added so both backend servers can receive and
+handle HTTP requests from the load balancer.
+
+The second application server is added so dynamic application logic can be
+executed on both backend servers.
+
+The second set of application files is added so both backend servers have the
+same code base and can serve the same website.
+
+The second MySQL database is added to create a Primary-Replica database setup.
+This improves database availability and can improve read performance if the
+application sends read queries to the Replica.
+
+Load balancing algorithm
+------------------------
+
+HAproxy is configured with the Round Robin distribution algorithm.
+
+Round Robin sends requests to backend servers one after another in order. For
+example, the first request goes to Server 1, the second request goes to Server
+2, the third request goes back to Server 1, and so on.
+
+This algorithm is simple and works well when the backend servers have similar
+hardware and are expected to handle similar amounts of traffic.
+
+Active-Active or Active-Passive
+-------------------------------
+
+This load balancer configuration enables an Active-Active setup for the backend
+web servers.
+
+In an Active-Active setup, all backend servers are online and receive traffic at
+the same time. In this infrastructure, both Server 1 and Server 2 can serve user
+requests through HAproxy.
+
+In an Active-Passive setup, one server actively receives traffic while another
+server waits as a standby. The passive server only starts receiving traffic if
+the active server fails.
+
+Database Primary-Replica cluster
+--------------------------------
+
+In a MySQL Primary-Replica cluster, the Primary database receives write
+operations such as INSERT, UPDATE, and DELETE. The Primary records these changes
+in its binary logs.
+
+The Replica database copies the changes from the Primary and applies them to
+keep its data synchronized. Replication is usually asynchronous, which means the
+Replica can be slightly behind the Primary for a short time.
+
+Difference between Primary and Replica for the application
+---------------------------------------------------------
+
+The Primary node is the database node used by the application for write
+operations. It is the source of truth for new or changed data.
+
+The Replica node is mainly used for read operations. The application can query
+the Replica for data that does not need to be immediately up to date. The
+application should not send normal write operations to the Replica, because the
+Replica is meant to copy data from the Primary.
+
+Issues with this infrastructure
+-------------------------------
+
+SPOF:
+
+    The HAproxy load balancer is a single point of failure. If it goes down,
+    users cannot reach the backend servers even if both backend servers are
+    healthy.
+
+    The MySQL Primary database is also a single point of failure for writes. If
+    the Primary goes down, the application cannot safely write new data unless a
+    Replica is promoted to become the new Primary.
+
+    If the DNS record points to only one load balancer IP address, that entry
+    point can also contribute to the single point of failure.
+
+Security issues:
+
+    There is no firewall, so services may be exposed to networks that should not
+    be able to access them. For example, the database should not be reachable
+    directly from the public internet.
+
+    There is no HTTPS termination described, so user traffic may be sent without
+    encryption if plain HTTP is used. This can expose passwords, cookies, and
+    other sensitive data.
+
+No monitoring:
+
+    There is no monitoring system to track server health, application errors,
+    traffic, CPU usage, memory usage, disk usage, database replication delay, or
+    service availability. Without monitoring, failures may not be detected
+    quickly.

@@ -1,0 +1,179 @@
+Secured and monitored web infrastructure
+========================================
+
+A user wants to access the website www.foobar.com from a browser.
+
+1. The user types https://www.foobar.com in the browser.
+2. The browser asks DNS to translate www.foobar.com into an IP address.
+3. The DNS zone for foobar.com has a www record that points to the public IP
+   address of the HAproxy load balancer.
+4. The user's browser opens an HTTPS connection to the load balancer.
+5. The load balancer firewall allows only the required public traffic, such as
+   HTTPS on port 443.
+6. HAproxy uses the SSL certificate for www.foobar.com to decrypt the HTTPS
+   request.
+7. HAproxy forwards the request to one of the two backend servers.
+8. Each backend server has a firewall that only allows required traffic from
+   trusted sources, such as traffic from the load balancer.
+9. Nginx on the selected backend server receives the request.
+10. Nginx serves static content directly or forwards dynamic requests to the
+    application server on the same machine.
+11. The application server runs the application code from its local application
+    files.
+12. If data is needed, the application server communicates with MySQL.
+13. Write operations go to the Primary MySQL node.
+14. Read operations can go to a Replica MySQL node if the application is
+    configured to use replicas for reads.
+15. Monitoring clients on all three servers collect metrics and logs and send
+    them to a monitoring service such as Sumo Logic.
+16. The response is sent back through Nginx, then HAproxy, then to the user's
+    browser over HTTPS.
+
+Infrastructure
+--------------
+
+Load balancer server:
+
+    Components:
+        - HAproxy load balancer
+        - Firewall
+        - SSL certificate for www.foobar.com
+        - Monitoring client
+
+Server 1:
+
+    Components:
+        - Firewall
+        - Nginx web server
+        - Application server
+        - Application files, which are the website code base
+        - MySQL Primary database
+        - Monitoring client
+
+Server 2:
+
+    Components:
+        - Firewall
+        - Nginx web server
+        - Application server
+        - Application files, which are the website code base
+        - MySQL Replica database
+        - Monitoring client
+
+Why each additional element is added
+------------------------------------
+
+The three firewalls are added to control network access to each server. One
+firewall protects the load balancer, and one firewall protects each backend
+server.
+
+The SSL certificate is added so www.foobar.com can be served over HTTPS. It
+allows the browser to verify the identity of the website and create an encrypted
+connection.
+
+The three monitoring clients are added to collect data from every server in the
+infrastructure. They send metrics and logs to a monitoring platform, which helps
+engineers detect problems and understand system behavior.
+
+What firewalls are for
+----------------------
+
+Firewalls filter incoming and outgoing network traffic based on rules.
+
+In this infrastructure, the load balancer firewall should allow public HTTPS
+traffic from users and should block unnecessary ports. The backend server
+firewalls should only allow required traffic from trusted sources, such as
+traffic from HAproxy to Nginx and database replication traffic between MySQL
+nodes.
+
+Firewalls reduce the attack surface by preventing direct access to services
+that should not be exposed publicly, such as MySQL.
+
+Why traffic is served over HTTPS
+--------------------------------
+
+Traffic is served over HTTPS to encrypt communication between the user's
+browser and www.foobar.com. This protects sensitive information such as
+passwords, session cookies, personal data, and form submissions.
+
+HTTPS also provides authentication because the SSL certificate proves that the
+browser is communicating with the real www.foobar.com domain, as long as the
+certificate is valid and trusted.
+
+What monitoring is used for
+---------------------------
+
+Monitoring is used to observe the health, performance, and availability of the
+infrastructure.
+
+It can track CPU usage, memory usage, disk usage, network traffic, HTTP status
+codes, response time, Nginx requests, application errors, MySQL performance,
+replication delay, and whether each service is running.
+
+Monitoring also helps alert engineers when something is wrong, such as a server
+being down, disk space becoming low, high error rates, or database replication
+falling behind.
+
+How the monitoring tool collects data
+-------------------------------------
+
+A monitoring client, also called an agent or data collector, runs on each
+server.
+
+The client collects system metrics from the operating system, reads logs from
+services such as Nginx and MySQL, and can collect application metrics if the
+application exposes them.
+
+The monitoring client then sends this data to a monitoring service such as Sumo
+Logic, Datadog, New Relic, or Prometheus with a remote storage and alerting
+system.
+
+Monitoring web server QPS
+-------------------------
+
+QPS means queries per second, or how many requests the web server handles each
+second.
+
+To monitor Nginx QPS, enable Nginx access logs or the Nginx status module, then
+configure the monitoring client to collect Nginx request data. The monitoring
+platform can calculate QPS by counting the number of HTTP requests received over
+a time interval and dividing by the number of seconds in that interval.
+
+For example, if Nginx receives 3,000 requests in 60 seconds, the QPS is 50.
+
+Issues with this infrastructure
+-------------------------------
+
+SSL termination at the load balancer:
+
+    Terminating SSL at the load balancer means HTTPS is decrypted at HAproxy.
+    If traffic from HAproxy to the backend servers is sent over plain HTTP, the
+    internal network traffic is not encrypted.
+
+    This can be a security issue if an attacker gains access to the internal
+    network or can inspect traffic between the load balancer and backend
+    servers. A stronger design would re-encrypt traffic between HAproxy and the
+    backend servers or use end-to-end HTTPS.
+
+Only one MySQL server accepts writes:
+
+    Having only one MySQL Primary server capable of accepting writes creates a
+    write bottleneck and a single point of failure for write operations.
+
+    If the Primary database fails, the application cannot write new data until a
+    Replica is promoted or the Primary is restored. This can cause downtime or
+    data consistency problems if failover is not automated and tested.
+
+Same components on every backend server:
+
+    Having the database, web server, and application server on the same backend
+    machines can be a problem because the components compete for the same CPU,
+    memory, disk, and network resources.
+
+    It also makes scaling less flexible. Web traffic, application processing,
+    and database load usually grow differently, so each layer should often be
+    scaled independently.
+
+    This design also increases the impact of maintenance. Updating or fixing
+    one layer on a server can affect the other layers running on the same
+    machine.
