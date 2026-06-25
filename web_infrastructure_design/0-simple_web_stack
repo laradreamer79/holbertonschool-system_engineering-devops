@@ -1,0 +1,91 @@
+Simple web stack
+================
+
+A user wants to access the website www.foobar.com from a browser.
+
+1. The user types https://www.foobar.com in the browser.
+2. The browser asks DNS to translate www.foobar.com into an IP address.
+3. The DNS zone for foobar.com has a www record that points to 8.8.8.8.
+4. The browser connects to the server at 8.8.8.8 using HTTP or HTTPS over TCP/IP.
+5. Nginx receives the request on the server.
+6. If the request is for a static file, Nginx can serve it directly.
+7. If the request needs dynamic content, Nginx forwards it to the application server.
+8. The application server runs the application code from the application files.
+9. If data is needed, the application server queries the MySQL database.
+10. The application server sends the response back to Nginx.
+11. Nginx sends the final HTTP response back to the user's browser.
+
+Infrastructure
+--------------
+
+Domain name:
+
+    foobar.com
+
+DNS record:
+
+    www.foobar.com -> 8.8.8.8
+
+Server:
+
+    IP address: 8.8.8.8
+
+    Components:
+        - Nginx web server
+        - Application server
+        - Application files, which are the website code base
+        - MySQL database
+
+What each component does
+-----------------------
+
+A server is a physical or virtual machine that provides services to other
+computers over a network. In this infrastructure, one server hosts every part
+needed to run the website.
+
+The domain name foobar.com is a human-readable name for the website. It lets
+users access the site with a name instead of typing the server IP address
+directly.
+
+The www record in www.foobar.com is a DNS A record in this design, because it
+maps the hostname www.foobar.com to the IPv4 address 8.8.8.8.
+
+The web server, Nginx, receives HTTP or HTTPS requests from users. It serves
+static files when possible and forwards dynamic requests to the application
+server.
+
+The application server runs the website's backend logic. It executes the
+application code, builds dynamic pages or API responses, and communicates with
+the database when data is required.
+
+The application files are the code base of the website. They contain the source
+code, templates, configuration, and other files needed by the application
+server.
+
+The database, MySQL, stores persistent data such as users, posts, products,
+sessions, or any information the website needs to keep after a request ends.
+
+The server communicates with the user's computer using the TCP/IP network
+protocol suite. The website traffic itself is carried with HTTP or HTTPS.
+
+Issues with this infrastructure
+-------------------------------
+
+SPOF:
+
+    This design has a single point of failure. If the only server goes down,
+    the web server, application server, application files, and database all
+    become unavailable. The website is completely down.
+
+Downtime during maintenance:
+
+    Because everything runs on one server, maintenance can cause downtime. For
+    example, deploying new code or restarting Nginx can temporarily make the
+    website unavailable to users.
+
+Cannot scale well:
+
+    This infrastructure cannot handle too much incoming traffic. The web
+    server, application server, and database all compete for the same CPU,
+    memory, disk, and network resources. If traffic grows, there is no load
+    balancer and no additional server to share the work.
